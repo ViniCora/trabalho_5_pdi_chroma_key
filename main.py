@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 
 # Carregar a imagem
-image = cv2.imread('4.bmp')
-image = image.astype(np.float32) / 255
+image = cv2.imread('2.bmp')
+image = image.astype(np.float32) / 255.0
 
 canal_azul, canal_verde, canal_vermelho = cv2.split(image)
 
@@ -13,10 +13,14 @@ green_mask[green_mask > 1] = 1
 green_mask[green_mask < 0] = 0
 green_mask = cv2.normalize(green_mask, None, 0, 1, cv2.NORM_MINMAX)
 
-green_mask = green_mask * 255
+green_mask -= 0.5
+green_mask *= 1.5
+green_mask += 0.5
 
-_, mascara_binaria = cv2.threshold(green_mask, 1, 255, cv2.THRESH_BINARY)
+green_mask[green_mask > 1] = 1
+green_mask[green_mask < 0] = 0
 
+green_mask[green_mask > 0.95] = 1
 
 cv2.imshow('Resultado', green_mask)
 cv2.waitKey(0)
@@ -24,24 +28,33 @@ cv2.waitKey(0)
 # Carregar o novo fundo
 background = cv2.imread('dw.jpg')
 
-# Redimensionar o novo fundo para as dimensões da imagem original
 background = cv2.resize(background, (image.shape[1], image.shape[0]))
-img_8u = cv2.convertScaleAbs(mascara_binaria)
-# Criar uma máscara invertida para o fundo verde
-inverse_green_mask = cv2.bitwise_not(img_8u)
 
-cv2.imshow('Resultado', inverse_green_mask)
-cv2.waitKey(0)
-# Extrair o objeto (não verde) da imagem original
-object_only = cv2.bitwise_and(image, image, mask=inverse_green_mask)
+background = background.astype(np.float32) / 255
 
-# Extrair o fundo verde da imagem de fundo usando a máscara verde
-green_background = cv2.bitwise_and(background, background, mask=img_8u)
+img_saida = background.copy()
 
-# Combinar o objeto extraído com o fundo de sua escolha
-#final_result = cv2.add(object_only, green_background)
+height = green_mask.shape[0]
+width = green_mask.shape[1]
+for y in range(0, height):
+    for x in range(0, width):
+        if green_mask[y][x] == 0:
+            img_saida[y][x] = image[y][x]
+        else:
+            if green_mask[y][x] >= 1:
+                img_saida[y][x] = background[y][x]
+            else:
+                print(green_mask[y][x])
+                img_saida[y][x] = background[y][x] * (1 - green_mask[y][x])
 
-# Mostrar o resultado
-cv2.imshow('Resultado', green_background + object_only)
+# Converter a máscara para 3 canais (escala de cinza para BGR) - Deixado para mostrar outras tentativas de alpha blending
+mascara_rgb = cv2.merge([green_mask, green_mask, green_mask])
+# Foi tentado usar esse blend, que funcionou bem para as imagens, porém sempre deixou as bordas verdes (e as sombras também)
+blended = background * (1 - mascara_rgb) + image * (mascara_rgb)
+
+# Converter a imagem resultante de volta para escala de 0 a 255
+blended = (blended * 255).astype(np.uint8)
+
+cv2.imshow('Imagem Mesclada', img_saida)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
